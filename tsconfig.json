@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "declaration": false,
+    "emitDecoratorMetadata": false,
+    "experimentalDecorators": true,
+    "module": "es6",
+    "moduleResolution": "classic",
+    "noFallthroughCasesInSwitch": false,
+    "noImplicitAny": false,
+    "noImplicitReturns": false,
+    "removeComments": false,
+    "sourceMap": false,
+    "strictNullChecks": false,
+    "target": "es6",
+    "plugins": [
+      {
+        "name": "tslint-language-service"
+      }
+    ]
+  },
+  "compileOnSave": true
+}

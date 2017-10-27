@@ -1,0 +1,43 @@
+body{
+	margin: 0;
+	padding: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	width: 100vw;
+	height: 100vh;
+	background-color: black;
+	font-family: 'Lora', sans-serif;
+}
+
+#mapContainer{
+	position: relative;
+	display:flex;
+	justify-content: center;
+	align-items: center;
+	width: 98vw;
+	height: 98vh;
+	overflow: hidden;
+}
+
+.draggable{
+	cursor: move;
+}
+
+.tips{
+	font-size: 0.75rem;
+}
+
+/*Styles from 'Caged'*/
+
+.d3-tip {
+  font-family: 'Lora', sans-serif;
+  line-height: 1;
+  padding: 5px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+/*End of styles from Caged*/

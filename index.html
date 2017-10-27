@@ -1,0 +1,214 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="descript" content="A world map using D3 geographic tools, which shows meteorite crashes">
+	<meta name="keywords" content="world meteorites geographic D3 graph">
+	<meta name="author"   content="Nikolai Riedel">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	
+	<link rel="stylesheet" type="text/css" href="index.css">
+	<link href="https://fonts.googleapis.com/css?family=Lora" rel="stylesheet">
+	<script src="https://d3js.org/d3.v4.js"></script>
+	<script src="mathFunctions.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.7.1/d3-tip.min.js"></script>
+	
+</head>
+
+<body id="body">
+	
+	<div id="mapContainer">
+	</div>
+		
+		<script>
+			
+			(function(){
+				
+				"use strict";
+				
+				//So width and height of the map can be set
+				const width = document.getElementById("mapContainer").clientWidth;
+				const height = document.getElementById("mapContainer").clientHeight;
+				
+				let meteoriteData = {};
+				
+				let reinitializeMeteoriteData = function(){
+					meteoriteData.features.forEach(function(d){
+						svg.append("path")
+					         .datum(d)
+					         .attr("d", path.pointRadius(massScale(Number(d.properties.mass))))
+					         .attr("fill", function(d){return d3.interpolateInferno(metTypeOrdScale(d.properties.recclass));})
+					         .attr("id", function(d){return "id" + d.properties.id;})
+					         .attr("class", "draggable")
+					         .on("mouseover", tip.show)
+					         .on("mouseout", tip.hide);
+					});
+				}
+				
+				//Append an svg for the map to the container
+				let svg = d3.select("#mapContainer").append("svg")
+											          .attr("id", "svgMapContainer")
+											          .attr("width", width)
+											          .attr("height", height);
+				
+				//The project is chosen. GeoOrthographic can be changed, but the drag code would need to be adapted.
+				let projection = d3.geoOrthographic()
+									  .center([width / 2, height / 2])
+									  .clipAngle(90);
+				let path = d3.geoPath(projection);
+				
+				//Instance of drag behavior for user interactive rotation of the globe / sphere / map
+				let geographicPositionStart = [],
+				    geographicPositionEnd = [],
+				    currentRotation = [],
+				    targetRotation = [];
+				let drag = d3.drag().on("start", function(){
+											geographicPositionStart = projection.invert(d3.mouse(this));
+											currentRotation = projection.rotate();
+											
+									})
+									.on("drag", function(){
+										geographicPositionEnd = projection.invert(d3.mouse(this));
+										currentRotation = projection.rotate();
+										
+										eulerAngles(geographicPositionStart, geographicPositionEnd, currentRotation).then(function(val){
+											// If you click wildly and rotate a lot, a typeerror occurs, probably due to the involved asynchronicity of the d3.mouse event.
+											// This makes the user able to go on, but does not really fix the error --> fixme!
+											try{
+												if(val[0] !== val[0]) throw error;
+												targetRotation = val;
+												projection.rotate(val);
+											}
+											catch(err){
+												console.log(err);
+												geographicPositionEnd = projection.invert(d3.mouse(this));
+												currentRotation = projection.rotate();
+											}
+											
+										});
+										
+										svg.selectAll("path").attr("d", path);
+																			  	
+									})
+									.on("end", function(){
+										meteoriteData.features.forEach(function(d, i, arr){
+											d3.select("#id" + d.properties.id).attr("d", path.pointRadius(massScale(Number(d.properties.mass))));
+										});
+									});
+			
+				//Zooming
+				let zoom =  d3.zoom().on("zoom", function () {
+											  d3.event.transform.x = 0;
+											  d3.event.transform.y = 0;
+											  svg.attr("transform", d3.event.transform);
+							           });
+				
+				//Scale for the masses of the meteorites, which late translates to the radius of the single points on the map.
+				let massScale = d3.scaleSqrt()
+				                    .range([0.5,30]);
+				
+				// Get all the types of meteorites in the sample to create color lables
+				
+				let getMetTypes = function(meteoriteData){
+					return new Promise(function(res, rej){
+						let typesArr = [];
+						meteoriteData.features.forEach(function(d, i, arr){
+							if(typesArr.includes(d.properties.recclass)) return;
+							else typesArr.push(d.properties.recclass);
+						});
+						res(typesArr.sort());
+					});
+				}
+				
+				let metTypeOrdScale = d3.scaleBand();
+				
+				
+				//Returns the mass of the meteorite with the highes mass. Is needed for the massScale. It returns a promise, so the map
+				//can only start to build, when the maximum mass is found.
+				let getMaxMass = function(features){
+					return new Promise(function(res, rej){
+						let maxMass = 0;
+						features.forEach(function(d, i, arr){
+							if(Number(d.properties.mass) > maxMass) {
+								maxMass = d.properties.mass;
+							}
+							if(i + 1 === arr.length) res(maxMass);
+						});	
+					});
+				}
+				
+				//Creates a tooltip to be shown when the user hovers the meteorites
+				let tip = d3.tip()
+				              .attr("class", "d3-tip")
+				              .html(function(d){
+				              		return(
+				            		"<div class='tips'>Name: " + d.properties.name + "<br/>" + 
+				            		                 "Recclass: " + d.properties.recclass + "<br/>" + 
+				            		                 "Reclat: " + d.properties.reclat + "<br/>" + 
+				            		                 "Reclong: " + d.properties.reclong + "<br/>" + 
+				            		                 "Year: " + (new Date(d.properties.year)).toLocaleString() + "</div>"
+				              );});
+				
+				
+				//Gets the data and draws the map and makes all those calls which are only possible when the data has arrived.				
+				d3.json('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json', function(error, data){
+					
+					if (error) throw error;
+					
+					let worldMap = data;
+					projection.fitSize([width, height], worldMap);
+					
+					d3.json('https://raw.githubusercontent.com/FreeCodeCamp/ProjectReferenceData/master/meteorite-strike-data.json', function(error, data){
+						
+						if(error) throw error;
+						
+						meteoriteData = data;
+						getMetTypes(meteoriteData).then(function(val){
+							metTypeOrdScale.range([0, 1])
+										   .domain(val);
+							
+						});
+						
+						//Get the mass of the meteorite with maximum mass and then build up the map.
+						getMaxMass(data.features).then(function(maxMass){
+							
+							massScale.domain([1, maxMass]);
+							
+							// Creates the contures of the landarea and also the country borders
+							svg.append("path")
+						         .datum(worldMap)
+						         .attr("d", path)
+						         .attr("stroke", "black")
+						         .attr("stroke-width", 0.2)
+						         .attr("fill", "#4FC0A4")
+						         .attr("class", "draggable zoomable")
+						         .attr("id", "worldMap");
+			
+							// Creates the background, which represents the oceans.
+							svg.insert("ellipse", "#worldMap")
+							     .attr("rx", d3.select("#worldMap").node().getBBox().width / 2 + 7)
+							     .attr("ry", d3.select("#worldMap").node().getBBox().height / 2 + 7)
+							     .attr("cx", d3.select("#worldMap").node().getBBox().x + d3.select("#worldMap").node().getBBox().width / 2)
+							     .attr("cy", d3.select("#worldMap").node().getBBox().y + d3.select("#worldMap").node().getBBox().height / 2)
+							     .attr("fill", "steelblue")
+							     .attr("id", "oceansBackground")
+							     .attr("class", "draggable");
+							
+							reinitializeMeteoriteData();
+							
+							d3.selectAll(".draggable").call(drag);
+							d3.selectAll(".zoomable").call(zoom);
+							
+							svg.call(tip);
+						});
+						
+					});
+					
+				});
+				
+			})();
+			
+		</script>
+	
+	</body>
+</html>
